@@ -4,14 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>FreeEscrow – Decentralized Escrow on Polygon</title>
-  <script src="https://cdn.ethers.org/lib/ethers-5.7.umd.min.js"></script>
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background:#f0f2f5; }
-    button { padding: 12px 24px; font-size: 16px; margin: 10px 0; cursor:pointer; }
-    input, select { padding: 10px; width: 100%; margin: 10px 0; font-size: 16px; }
+    button { padding: 12px 24px; font-size: 16px; margin: 10px 0; cursor:pointer; border: none; border-radius: 8px; background: #007bff; color: white; }
+    button:hover { background: #0056b3; }
+    input, select { padding: 10px; width: 100%; margin: 10px 0; font-size: 16px; border: 1px solid #ddd; border-radius: 4px; }
     .box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
     .success { color: green; font-weight: bold; }
     .error { color: red; }
+    #debug { font-size: 12px; color: #666; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -21,6 +23,7 @@
 
     <button id="connect">Connect Wallet</button>
     <p id="account"></p>
+    <div id="debug"></div>
 
     <div id="form" style="display:none;">
       <h2>Create New Escrow</h2>
@@ -60,36 +63,67 @@
     let provider, signer, contract, account;
 
     document.getElementById("connect").onclick = async () => {
-      if (typeof window.ethereum !== "undefined") {
-        provider = new ethers.providers.Web3Provider(window.ethereum);
+      const debug = document.getElementById("debug");
+      const connectBtn = document.getElementById("connect");
+      connectBtn.textContent = "Connecting...";
+      debug.textContent = "";
+
+      try {
+        // Check for MetaMask
+        if (typeof window.ethereum === "undefined") {
+          throw new Error("MetaMask not found! Install it from metamask.io and refresh.");
+        }
+        debug.textContent = "MetaMask detected. Requesting connection...";
+
+        // Create provider
+        provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+        debug.textContent += " | Provider created.";
+
+        // Request accounts (triggers popup)
         await provider.send("eth_requestAccounts", []);
+        debug.textContent += " | Accounts requested.";
+
+        // Get signer and account
         signer = provider.getSigner();
         account = await signer.getAddress();
         contract = new ethers.Contract(contractAddress, abi, signer);
 
-        document.getElementById("account").innerHTML = Connected: <b>${account.slice(0,8)}...${account.slice(-6)}</b>;
-        document.getElementById("connect").style.display = "none";
+        // Success UI
+        document.getElementById("account").innerHTML = Connected: <b>${account.slice(0,6)}...${account.slice(-4)}</b> on ${await provider.getNetwork().then(n => n.name || 'Amoy')};
+        connectBtn.style.display = "none";
         document.getElementById("form").style.display = "block";
         document.getElementById("existing").style.display = "block";
-      } else {
-        alert("Please install MetaMask!");
+        debug.textContent = "Connected successfully!";
+
+      } catch (error) {
+        console.error("Connection error:", error); // For your console check
+        let msg = "Connection failed: ";
+        if (error.code === 4001) msg += "You rejected the connection. Try again?";
+        else if (error.code === -32002) msg += "MetaMask is pending—check the popup.";
+        else if (error.message.includes("User denied")) msg += "Access denied. Refresh and retry.";
+        else msg += error.message;
+        alert(msg);
+        debug.innerHTML = <span class="error">Error: ${msg}</span>;
+        connectBtn.textContent = "Connect Wallet";
       }
     };
 
     document.getElementById("create").onclick = async () => {
       const seller = document.getElementById("seller").value.trim();
-      const days = document.getElementById("days").value;
+      const days = parseInt(document.getElementById("days").value);
       const amount = ethers.utils.parseEther(document.getElementById("amount").value);
 
       if (!ethers.utils.isAddress(seller)) return alert("Invalid seller address");
+      if (!account) return alert("Connect wallet first!");
 
       const status = document.getElementById("status");
       status.textContent = "Sending transaction…";
       try {
-        const tx = await contract.deployTransaction(seller, days, { value: amount });
+        // Note: For new escrow, we need to deploy a new instance each time (factory pattern ideal, but simple for now)
+        const EscrowFactory = new ethers.ContractFactory(abi, new ethers.utils.Interface(abi).getFunction("constructor"), signer);
+        const tx = await EscrowFactory.deploy(seller, days, { value: amount });
         await tx.wait();
-        status.innerHTML = `<span class="success">✅ Escrow created! Share this address:<br/>
-        <code>${tx.contractAddress || "check Polygonscan"}</code></span>`;
+        status.innerHTML = <span class="success">✅ Escrow created! Tx: <a href="https://amoy.polygonscan.com/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a><br/>New contract: ${tx.deployTransaction?.creates || 'Check explorer'}</span>;
       } catch (e) {
         status.innerHTML = <span class="error">Error: ${e.message}</span>;
       }
