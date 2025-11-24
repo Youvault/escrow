@@ -7,10 +7,11 @@
   <script src="https://cdn.ethers.org/lib/ethers-5.7.umd.min.js"></script>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 660px; margin: 40px auto; padding: 20px; background:#f8faff; line-height:1.6; }
-    h1 { text-align:center; color:#4f46e5; margin-bottom:10px; }
+    h1 { text-align:center; color:#4f46e5; margin-bottom:8px; }
+    h1 + p { text-align:center; color:#666; margin-top:0; }
     .card { background:white; padding:32px; border-radius:18px; box-shadow:0 10px 40px rgba(0,0,0,0.08); }
     button { padding:16px; font-size:17px; margin:12px 0; border:none; border-radius:12px; cursor:pointer; width:100%; font-weight:bold; transition:0.2s; }
-    button:hover { transform: translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.15); }
+    button:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.15); }
     .deposit { background:#10b981; color:white; }
     .release { background:#6366f1; color:white; }
     .refund { background:#ef4444; color:white; }
@@ -23,17 +24,17 @@
 </head>
 <body>
   <h1>Simple Escrow</h1>
-  <p style="text-align:center; color:#666;">Polygon Amoy Testnet – 100% on-chain</p>
+  <p>Polygon Amoy Testnet – Fully On-Chain</p>
 
   <div class="card">
     <div class="info">
-      Contract: <code>0x24f92e4AF56a70dceaD3a1b990c18EF4c768D009</code><br><br>
+      Contract:<br><code>0x24f92e4AF56a70dceaD3a1b990c18EF4c768D009</code><br><br>
       Network: <span id="network">checking…</span>
     </div>
 
     <div id="status">Connecting wallet…</div>
 
-    <p><strong>Escrow Amount:</strong> <span id="amount">0</span> POL</p>
+    <p><strong>Amount in Escrow:</strong> <span id="amount">0</span> POL</p>
     <p><strong>Buyer:</strong> <span id="buyer">—</span></p>
     <p><strong>Seller:</strong> <span id="seller">—</span></p>
     <p><strong>Deadline:</strong> <span id="deadline">—</span></p>
@@ -41,14 +42,14 @@
 
     <hr style="border:1px dashed #ddd; margin:30px 0;">
 
-    <h3>Buyer: Deposit Funds</h3>
-    <input type="number" step="0.001" id="depositAmount" placeholder="Enter amount in POL (e.g. 0.05)" />
+    <h3>Buyer → Deposit Funds</h3>
+    <input type="number" step="0.001" id="depositAmount" placeholder="Amount in POL (e.g. 0.05)" />
     <button class="deposit" onclick="deposit()">Deposit POL</button>
 
-    <h3>Seller: Release Funds</h3>
+    <h3>Seller → Release Funds</h3>
     <button class="release" onclick="release()">Release to Seller</button>
 
-    <h3>Buyer: Claim Refund (after deadline)</h3>
+    <h3>Buyer → Claim Refund (after deadline)</h3>
     <button class="refund" onclick="refund()">Request Refund</button>
   </div>
 
@@ -59,47 +60,47 @@
     let provider, signer, contract, account;
 
     async function init() {
-      if (!window.ethereum) return document.getElementById("status").innerHTML = "<span class='error'>MetaMask not found</span>";
-
-      provider = new ethers.providers.Web3Provider(window.ethereum);
+      if (!window.ethereum) {
+        document.getElementById("status").innerHTML = "<span class='error'>MetaMask not detected – install it!</span>";
+        return;
+      }
+      provider = new ethers.providers.Web3Provider(window.ethereum, "any");
       await provider.send("eth_requestAccounts", []);
       signer = provider.getSigner();
       account = await signer.getAddress();
       contract = new ethers.Contract(ADDRESS, ABI, signer);
 
       const net = await provider.getNetwork();
-      document.getElementById("network").textContent = ${net.name} (chain ${net.chainId});
+      document.getElementById("network").textContent = ${net.name} (ID ${net.chainId});
 
       if (net.chainId !== 80002) {
-        document.getElementById("status").innerHTML = "<span class='error'>Please switch to Polygon Amoy testnet (chain 80002)</span>";
+        document.getElementById("status").innerHTML = "<span class='error'>Switch to Polygon Amoy (chain 80002)</span>";
         return;
       }
-
-      document.getElementById("status").innerHTML = "<span class='success'>Connected! Ready</span>";
+      document.getElementById("status").innerHTML = "<span class='success'>Connected & ready!</span>";
       refresh();
       setInterval(refresh, 10000);
     }
 
     async function refresh() {
       try {
-        const [amt, buyer, seller, deadline, released] = await Promise.all([
-          contract.amount(), contract.buyer(), contract.seller(),
-          contract.deadline(), contract.released()
+        const [amt, buyerAddr, sellerAddr, deadline, released] = await Promise.all([
+          contract.amount(), contract.buyer(), contract.seller(), contract.deadline(), contract.released()
         ]);
         document.getElementById("amount").textContent = ethers.utils.formatEther(amt);
-        document.getElementById("buyer").textContent = buyer === "0x0000000000000000000000000000000000000000" ? "—": buyer.slice(0,10)+"...";
-        document.getElementById("seller").textContent = seller.slice(0,10)+"...";
-        document.getElementById("deadline").textContent = deadline.eq(0) ? "—" : new Date(deadline * 1000).toLocaleString();
+        document.getElementById("buyer").textContent = buyerAddr === "0x0000000000000000000000000000000000000000" ? "—" : buyerAddr.slice(0,10)+"...";
+        document.getElementById("seller").textContent = sellerAddr.slice(0,10)+"...";
+        document.getElementById("deadline").textContent = deadline.toNumber() === 0 ? "—" : new Date(deadline * 1000).toLocaleString();
         document.getElementById("released").textContent = released ? "Yes" : "No";
-      } catch(e) { console.error(e); }
+      } catch(e) { console.log(e); }
     }
 
     async function deposit() {
-      const val = document.getElementById("depositAmount").value;
-      if (!val || val <= 0) return alert("Enter an amount");
+      const val = document.getElementById("depositAmount").value.trim();
+      if (!val || val <= 0) return alert("Enter a valid amount");
       const wei = ethers.utils.parseEther(val);
       const tx = await contract.deposit({ value: wei });
-      alert("Transaction sent – waiting for confirmation…");
+      alert("Transaction sent – waiting…");
       await tx.wait();
       alert("Deposit successful!");
       refresh();
@@ -117,7 +118,7 @@
       const tx = await contract.refund();
       alert("Requesting refund…");
       await tx.wait();
-      alert("Refund successful!");
+      alert("Refund sent!");
       refresh();
     }
 
