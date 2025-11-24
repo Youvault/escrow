@@ -2,85 +2,110 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>FreeEscrow – Live & Working</title>
+  <title>FreeEscrow – Debug Version</title>
   <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 20px; background:#f4f5ff; text-align:center; }
-    button { padding: 14px 28px; font-size: 17px; margin: 10px; border:none; border-radius:10px; cursor:pointer; }
-    .primary { background:#6366f1; color:white; }
-    input { padding: 12px; width: 100%; margin:8px 0; font-size:16px; border:1px solid #ccc; border-radius:8px; }
-    .box { background:white; padding:30px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.1); }
-    .success { color:green; font-weight:bold; }
+    body { font-family: sans-serif; padding: 50px; background: #f0f2f5; text-align: center; }
+    button { padding: 15px 30px; font-size: 18px; margin: 10px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    #log { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; text-align: left; min-height: 100px; }
+    input { padding: 12px; width: 90%; margin: 10px; font-size: 16px; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h1>FreeEscrow</h1>
-    <p>Zero fees • 100% on-chain • Polygon Amoy testnet</p>
+  <h1>🔒 FreeEscrow (Debug Mode)</h1>
+  <p>Connect & Create Escrows on Polygon Amoy</p>
 
-    <button id="connect" class="primary">CONNECT WALLET</button>
-    <p id="account"></p>
+  <button id="connect">CONNECT WALLET</button>
+  <p id="account"></p>
 
-    <div id="form" style="display:none; margin-top:20px;">
-      <input type="text" id="seller" placeholder="Seller wallet address (0x…)" />
-      <input type="number" id="days" placeholder="Days until auto-refund" value="7" />
-      <input type="number" id="amount" step="0.001" placeholder="Amount in POL" value="0.05" />
-      <button id="create" class="primary">Create Escrow</button>
-      <p id="status"></p>
-    </div>
+  <div id="form" class="hidden">
+    <h2>Create Escrow</h2>
+    <input type="text" id="seller" placeholder="Seller address (0x...)" />
+    <input type="number" id="days" value="7" placeholder="Days" />
+    <input type="number" id="amount" step="0.001" value="0.05" placeholder="POL Amount" />
+    <button id="create">Create Escrow</button>
+    <p id="status"></p>
   </div>
 
-<script>
-  const log = s => document.getElementById("status").innerHTML = s;
-  const CONTRACT_ADDRESS = "0x95612608c810AB1D8d3492E441E0E2810AbBef38";
+  <div id="log">Click Connect → Check console for details</div>
 
-  const ABI = [
+<script>
+  const logDiv = document.getElementById("log");
+  const consoleLog = (msg) => {
+    console.log(msg);
+    logDiv.innerHTML += "<br>" + msg;
+  };
+
+  const CONTRACT_ADDRESS = "0x95612608c810AB1D8d3492E441E0E2810AbBef38"; // Your contract (note: for new escrows, we deploy fresh instances)
+
+  const ABI = [ /* Same ABI as before - abbreviated for space */
     "constructor(address _seller, uint _durationInDays) payable",
-    "function release()",
-    "function refund()",
+    "event Deposited(address buyer, uint amount)",
+    "event Released(address seller, uint amount)",
+    "event Refunded(address buyer, uint amount)",
     "function buyer() view returns (address)",
     "function seller() view returns (address payable)",
     "function amount() view returns (uint)",
     "function released() view returns (bool)",
-    "function deadline() view returns (uint)"
+    "function deadline() view returns (uint)",
+    "function release()",
+    "function refund()"
   ];
 
-  let signer, factory;
+  let signer, factory, account;
 
   document.getElementById("connect").onclick = async () => {
-    if (!window.ethereum) return alert("MetaMask not found!");
+    consoleLog("1. Button clicked – Starting connect...");
+    
+    if (typeof window.ethereum === "undefined") {
+      const errMsg = "❌ window.ethereum undefined! Install/unlock MetaMask or try incognito. Check console for more.";
+      consoleLog(errMsg);
+      alert(errMsg);
+      return;
+    }
+    consoleLog("✅ MetaMask detected!");
 
+    consoleLog("2. Requesting accounts...");
     try {
-      const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      consoleLog("✅ Accounts requested: " + accounts[0]);
+
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       signer = provider.getSigner();
-
-      document.getElementById("account").innerHTML = 
-        Connected: <b>${accounts[0].slice(0,8)}...${accounts[0].slice(-6)}</b>;
+      account = await signer.getAddress();
+      
+      document.getElementById("account").innerHTML = Connected: <b>${account.slice(0,8)}...${account.slice(-6)}</b>;
       document.getElementById("connect").style.display = "none";
-      document.getElementById("form").style.display = "block";
+      document.getElementById("form").classList.remove("hidden");
 
-      // Create factory (this is the only extra line we needed)
-      const bytecode = "608060405234801561001057600080fd5b5060c08061001f60003960c0f3fe60806040526004361061003f5760003560e01c80633ccfd60b1461004457806381e82b7a14610071578063b5c3f2e31461009e575b600080fd5b61005f6004803603602081101561005a57600080fd5b503381336100b9565b60408051918252519081900360200190f35b61008c6004803603602081101561008857600080fd5b503381336100c2565b604080516001600160a01b039092168252519081900360200190f35b6100b76100d1565b005b60005481565b6001546001600160a01b031681565b600080546001600160a01b0319166001600160a01b0392909216919091179055565b600080546001600160a01b0319169055506100f6600082826100e983856100e8565b5050565b6000828261010c919061010b565b5050565b600061011882610117565b91506000828261012a9190610129565b5050565b600061013682610135565b9150600082826101489190610147565b50505050565b6000808261015a9190610159565b5050565b600061016782610166565b9150600082826101799190610178565b50505050565b6000808261018c919061018b565b5050565b600061019982610198565b9150600082826101ab91906101aa565b5050505056";
+      // Prep factory for new escrows
+      const bytecode = "0x608060405234801561001057600080fd5b5060c08061001f60003960c0f3fe60806040526004361061003f5760003560e01c80633ccfd60b1461004457806381e82b7a14610071578063b5c3f2e31461009e575b600080fd5b61005f6004803603602081101561005a57600080fd5b503381336100b9565b60408051918252519081900360200190f35b61008c6004803603602081101561008857600080fd5b503381336100c2565b604080516001600160a01b039092168252519081900360200190f35b6100b76100d1565b005b60005481565b6001546001600160a01b031681565b600080546001600160a01b0319166001600160a01b0392909216919091179055565b600080546001600160a01b0319169055506100f6600082826100e983856100e8565b5050565b6000828261010c919061010b565b5050565b600061011882610117565b91506000828261012a9190610129565b5050565b600061013682610135565b9150600082826101489190610147565b50505050565b6000808261015a9190610159565b5050565b600061016782610166565b9150600082826101799190610178565b50505050565b6000808261018c919061018b565b5050565b600061019982610198565b9150600082826101ab91906101aa565b5050505056"; // Compiled bytecode
       factory = new ethers.ContractFactory(ABI, bytecode, signer);
+      consoleLog("✅ Factory ready for escrows!");
 
-    } catch (e) { alert("Connection failed: " + e.message); }
+    } catch (err) {
+      consoleLog("❌ Connect failed: " + err.message);
+      alert("Connect failed: " + err.message + " (Check MetaMask popup?)");
+    }
   };
 
   document.getElementById("create").onclick = async () => {
     const seller = document.getElementById("seller").value.trim();
     const days = document.getElementById("days").value;
-    const amount = ethers.utils.parseEther(document.getElementById("amount").value || "0");
+    const amtStr = document.getElementById("amount").value || "0";
+    const amount = ethers.utils.parseEther(amtStr);
 
-    if (!ethers.utils.isAddress(seller)) return log("Invalid seller address");
+    if (!ethers.utils.isAddress(seller)) return consoleLog("❌ Invalid seller address");
 
-    log("Sending transaction…");
+    consoleLog("Creating escrow with " + amtStr + " POL for " + days + " days...");
     try {
       const escrow = await factory.deploy(seller, days, { value: amount });
       await escrow.deployTransaction.wait();
-      log(<span class="success">Escrow created!<br>New contract:<br><code>${escrow.address}</code></span>);
+      consoleLog("✅ Success! New escrow at: " + escrow.address + " (Check Amoy Polygonscan)");
+      document.getElementById("status").innerHTML = <span style="color:green">Escrow live: ${escrow.address}</span>;
     } catch (e) {
-      log(<span style="color:red">Error: ${e.message.split("(")[0]}</span>);
+      consoleLog("❌ Create error: " + e.message);
     }
   };
 </script>
