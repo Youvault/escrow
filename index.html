@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FreeEscrow – Decentralized Escrow on Polygon</title>
+  <script src="https://cdn.ethers.org/lib/ethers-5.7.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background:#f0f2f5; }
+    button { padding: 12px 24px; font-size: 16px; margin: 10px 0; cursor:pointer; }
+    input, select { padding: 10px; width: 100%; margin: 10px 0; font-size: 16px; }
+    .box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    .success { color: green; font-weight: bold; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🔒 FreeEscrow</h1>
+    <p>No fees · Fully on-chain · Works on Polygon Amoy (testnet) right now</p>
+
+    <button id="connect">Connect Wallet</button>
+    <p id="account"></p>
+
+    <div id="form" style="display:none;">
+      <h2>Create New Escrow</h2>
+      <input type="text" id="seller" placeholder="Seller wallet address (0x…)" />
+      <input type="number" id="days" placeholder="Duration in days" value="7" />
+      <input type="number" id="amount" step="0.001" placeholder="Amount in POL" value="0.05" />
+      <button id="create">🚀 Create Escrow</button>
+      <p id="status"></p>
+    </div>
+
+    <div id="existing" style="display:none; margin-top:30px;">
+      <h2>Already have an escrow address?</h2>
+      <input type="text" id="escrowAddr" placeholder="0x…" style="font-family:monospace;" />
+      <button id="load">Load Escrow</button>
+      <div id="escrowInfo"></div>
+    </div>
+  </div>
+
+  <!-- Your contract + ABI -->
+  <script>
+    const contractAddress = "0x95612608c810AB1D8d3492E441E0E2810AbBef38";
+
+    const abi = [
+      "constructor(address _seller, uint _durationInDays) payable",
+      "event Deposited(address buyer, uint amount)",
+      "event Released(address seller, uint amount)",
+      "event Refunded(address buyer, uint amount)",
+      "function buyer() view returns (address)",
+      "function seller() view returns (address payable)",
+      "function amount() view returns (uint)",
+      "function released() view returns (bool)",
+      "function deadline() view returns (uint)",
+      "function release()",
+      "function refund()"
+    ];
+
+    let provider, signer, contract, account;
+
+    document.getElementById("connect").onclick = async () => {
+      if (typeof window.ethereum !== "undefined") {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        account = await signer.getAddress();
+        contract = new ethers.Contract(contractAddress, abi, signer);
+
+        document.getElementById("account").innerHTML = Connected: <b>${account.slice(0,8)}...${account.slice(-6)}</b>;
+        document.getElementById("connect").style.display = "none";
+        document.getElementById("form").style.display = "block";
+        document.getElementById("existing").style.display = "block";
+      } else {
+        alert("Please install MetaMask!");
+      }
+    };
+
+    document.getElementById("create").onclick = async () => {
+      const seller = document.getElementById("seller").value.trim();
+      const days = document.getElementById("days").value;
+      const amount = ethers.utils.parseEther(document.getElementById("amount").value);
+
+      if (!ethers.utils.isAddress(seller)) return alert("Invalid seller address");
+
+      const status = document.getElementById("status");
+      status.textContent = "Sending transaction…";
+      try {
+        const tx = await contract.deployTransaction(seller, days, { value: amount });
+        await tx.wait();
+        status.innerHTML = `<span class="success">✅ Escrow created! Share this address:<br/>
+        <code>${tx.contractAddress || "check Polygonscan"}</code></span>`;
+      } catch (e) {
+        status.innerHTML = <span class="error">Error: ${e.message}</span>;
+      }
+    };
+  </script>
+</body>
+</html>
