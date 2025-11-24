@@ -1,233 +1,136 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>FreeEscrow – Create Trustless Escrows on Polygon Amoy</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js" crossorigin="anonymous"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simple Escrow - Polygon Amoy</title>
+  <script src="https://cdn.ethers.org/lib/ethers-5.7.umd.min.js"></script>
   <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #333;
-      margin: 0;
-      padding: 20px;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .container {
-      background: white;
-      padding: 30px;
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-      width: 100%;
-      max-width: 500px;
-      margin-top: 40px;
-    }
-    h1 { color: #5f3dc4; margin-top: 0; }
-    button {
-      padding: 14px 28px;
-      font-size: 18px;
-      margin: 12px 0;
-      background: #5f3dc4;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-    button:hover { background: #4c1d95; }
-    input {
-      width: 100%;
-      padding: 14px;
-      margin: 10px 0;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 16px;
-      box-sizing: border-box;
-    }
-    #log {
-      margin-top: 20px;
-      padding: 16px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      max-height: 200px;
-      overflow-y: auto;
-      font-family: monospace;
-      font-size: 14px;
-      text-align: left;
-      border: 1px solid #e0e0e0;
-    }
-    .hidden { display: none; }
-    a { color: #5f3dc4; }
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background:#f4f4f9; }
+    h1 { text-align:center; color:#6366f1; }
+    .card { background:white; padding:25px; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1); }
+    button { padding:12px 20px; font-size:16px; margin:10px 5px; border:none; border-radius:8px; cursor:pointer; }
+    .deposit { background:#10b981; color:white; }
+    .release { background:#6366f1; color:white; }
+    .refund { background:#ef4444; color:white; }
+    input, button { width:100%; box-sizing:border-box; }
+    .info { margin:15px 0; padding:12px; background:#e0e7ff; border-radius:8px; }
+    #status { margin-top:15px; font-weight:bold; }
   </style>
 </head>
 <body>
+  <h1>Simple Escrow on Polygon Amoy</h1>
+  <div class="card">
+    <div class="info">
+      Contract: <code>0x95612608c810AB1D8d3492E441E0E2810AbBef38</code><br>
+      <span id="network"></span>
+    </div>
 
-<div class="container">
-  <h1>FreeEscrow</h1>
-  <p>Create trustless escrows on <strong>Polygon Amoy</strong> testnet</p>
+    <p><strong>Status:</strong> <span id="status">Connecting…</span></p>
+    <p>Escrow Amount: <span id="amount">—</span> POL</p>
+    <p>Buyer: <span id="buyer">—</span></p>
+    <p>Deadline: <span id="deadline">—</span></p>
+    <p>Funds Released? <span id="released">—</span></p>
 
-  <button id="connect">Connect Wallet (MetaMask)</button>
-  <p id="account"></p>
+    <hr>
 
-  <div id="form" class="hidden">
-    <h2>Create New Escrow</h2>
-    <input type="text" id="seller" placeholder="Seller address (0x...)" />
-    <input type="number" id="days" value="7" min="1" placeholder="Escrow duration (days)" />
-    <input type="number" id="amount" step="0.001" value="0.05" placeholder="Amount in POL" />
-    <button id="create">Deploy Escrow Contract</button>
-    <p id="status"></p>
+    <h3>Buyer: Deposit Funds</h3>
+    <input type="number" step="0.001" id="depositAmount" placeholder="Amount in POL" />
+    <button class="deposit" onclick="deposit()">Deposit POL into Escrow</button>
+
+    <h3>Seller: Release Funds</h3>
+    <button class="release" onclick="release()">Release Funds to Seller</button>
+
+    <h3>Buyer: Get Refund (if deadline passed)</h3>
+    <button class="refund" onclick="refund()">Refund Buyer</button>
   </div>
 
-  <div id="log">
-    <strong>Log:</strong><br>
-    Ready. Click Connect Wallet to begin.
-  </div>
+  <script>
+    const CONTRACT_ADDRESS = "0x95612608c810AB1D8d3492E441E0E2810AbBef38";
+    const ABI = [
+      {"inputs":[{"internalType":"address","name":"_seller","type":"address"},{"internalType":"uint256","name":"_durationInDays","type":"uint256"}],"stateMutability":"payable","type":"constructor"},
+      {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Deposited","type":"event"},
+      {"inputs":[],"name":"refund","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Refunded","type":"event"},
+      {"inputs":[],"name":"release","outputs":[],"stateMutability":"nonpayable","type":"function"},
+      {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"seller","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Released","type":"event"},
+      {"inputs":[],"name":"amount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"buyer","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"deadline","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"released","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+      {"inputs":[],"name":"seller","outputs":[{"internalType":"address payable","name":"","type":"address"}],"stateMutability":"view","type":"function"}
+    ];
 
-  <hr style="margin: 30px 0; border: 0.5px solid #eee;" />
-  <small>
-    Testnet only • Get free POL: 
-    <a href="https://faucet.polygon.technology/" target="_blank">Official Faucet</a> |
-    <a href="https://www.amoyfaucet.com/" target="_blank">Fast Faucet</a>
-  </small>
-</div>
+    let provider, signer, contract;
 
-<script>
-  const logDiv = document.getElementById("log");
-  const log = (msg) => {
-    console.log(msg);
-    const time = new Date().toLocaleTimeString();
-    logDiv.innerHTML += <br>[${time}] ${msg};
-    logDiv.scrollTop = logDiv.scrollHeight;
-  };
+    async function init() {
+      if (typeof window.ethereum !== 'undefined') {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-  const AMOY_CHAIN_ID = "0x13882"; // 80002
-  const ABI = [
-    "constructor(address _seller, uint256 _durationInDays) payable",
-    "function release()",
-    "function refund()",
-    "function buyer() view returns (address)",
-    "function seller() view returns (address payable)",
-    "function amount() view returns (uint256)",
-    "function deadline() view returns (uint256)",
-    "function released() view returns (bool)",
-    "event Deposited(address buyer, uint amount)",
-    "event Released(address seller, uint amount)",
-    "event Refunded(address buyer, uint amount)"
-  ];
+        const network = await provider.getNetwork();
+        document.getElementById("network").textContent = Network: ${network.name} (chainId ${network.chainId});
 
-  // Minimal verified escrow bytecode (compiled with Solidity 0.8.20 + optimizer)
-  const BYTECODE = "0x608060405234801561001057600080fd5b5061018a806100206000396000f3fe60806040526004361061003f5760003560e01c80633ccfd60b1461004457806381e82b7a14610071578063b5c3f2e31461009e575b600080fd5b61005f6004803603602081101561005a57600080fd5b503381336100b9565b60408051918252519081900360200190f35b61008c6004803603602081101561008857600080fd5b503381336100c2565b604080516001600160a01b039092168252519081900360200190f35b6100b76100d1565b005b60005481565b6001546001600160a01b031681565b600080546001600160a01b0319166001600160a01b0392909216919091179055565b600080546001600160a01b0319169055506100f6600082826100e983856100e8565b5050565b6000828261010c919061010b565b5050565b600061011882610117565b91506000828261012a9190610129565b5050565b600061013682610135565b9150600082826101489190610147565b50505050565b6000808261015a9190610159565b5050565b600061016782610166565b9150600082826101799190610178565b50505050565b6000808261018c919061018b565b5050565b600061019982610198565b9150600082826101ab91906101aa565b5050505056fea2646970667358221220f1a9c3e1b8d5e8c7a9f8e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4736f6c63430008140033";
-
-  let signer, factory, account;
-
-  document.getElementById("connect").onclick = async () => {
-    log("Connecting to wallet...");
-
-    if (!window.ethereum) {
-      alert("MetaMask not detected! Please install MetaMask.");
-      return;
-    }
-
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-
-    try {
-      // Try switching to Amoy
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: AMOY_CHAIN_ID }],
-      });
-    } catch (switchError) {
-      if (switchError.code === 4902 || switchError.code === -32603) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: AMOY_CHAIN_ID,
-              chainName: "Polygon Amoy Testnet",
-              nativeCurrency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-              rpcUrls: ["https://rpc-amoy.polygon.technology"],
-              blockExplorerUrls: ["https://amoy.polygonscan.com"]
-            }]
-          });
-          log("Polygon Amoy added!");
-        } catch (addError) {
-          log("Failed to add Amoy network");
-          alert("Please add Polygon Amoy manually in MetaMask");
+        if (network.chainId !== 80002) {
+          document.getElementById("status").textContent = "Please switch to Polygon Amoy testnet!";
           return;
         }
+
+        updateStatus();
+        setInterval(updateStatus, 8000);
       } else {
-        log("Network switch rejected or failed");
-        return;
+        document.getElementById("status").textContent = "Please install MetaMask!";
       }
     }
 
-    try {
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      signer = provider.getSigner();
-      account = await signer.getAddress();
+    async function updateStatus() {
+      try {
+        const amount = ethers.utils.formatEther(await contract.amount());
+        const buyer = await contract.buyer();
+        const deadline = Number(await contract.deadline());
+        const released = await contract.released();
+        const seller = await contract.seller();
 
-      const network = await provider.getNetwork();
-      if (network.chainId !== 80002) {
-        alert("Please switch to Polygon Amoy in MetaMask!");
-        return;
+        document.getElementById("amount").textContent = amount;
+        document.getElementById("buyer").textContent = buyer === "0x0000000000000000000000000000000000000000" ? "Not set" : buyer;
+        document.getElementById("deadline").textContent = new Date(deadline * 1000).toLocaleString();
+        document.getElementById("released").textContent = released ? "Yes" : "No";
+        document.getElementById("status").textContent = "Connected & synced";
+      } catch (e) {
+        document.getElementById("status").textContent = "Error reading contract";
       }
-
-      factory = new ethers.ContractFactory(ABI, BYTECODE, signer);
-
-      document.getElementById("account").innerHTML = 
-        Connected: <b>${account.substr(0,8)}...${account.substr(-6)}</b> on Amoy;
-      document.getElementById("connect").style.display = "none";
-      document.getElementById("form").classList.remove("hidden");
-
-      log("Wallet connected and factory ready! You can now create escrows.");
-
-    } catch (err) {
-      log("Connection failed: " + (err.message || err));
-      alert("Wallet connection failed or rejected");
-    }
-  };
-
-  document.getElementById("create").onclick = async () => {
-    const sellerAddr = document.getElementById("seller").value.trim();
-    const days = document.getElementById("days").value;
-    const amountStr = document.getElementById("amount").value || "0";
-    const amount = ethers.utils.parseEther(amountStr);
-
-    if (!ethers.utils.isAddress(sellerAddr)) {
-      log("Invalid seller address!");
-      return alert("Please enter a valid seller address");
     }
 
-    log(Deploying escrow: ${amountStr} POL, ${days} days, seller ${sellerAddr}...);
-
-    try {
-      const escrow = await factory.deploy(sellerAddr, days, { value: amount });
-      log("Transaction sent! Waiting for confirmation...");
-      document.getElementById("status").innerHTML = "Deploying... check MetaMask";
-
-      const deployed = await escrow.deployed();
-      const address = deployed.address;
-
-      log(SUCCESS! Escrow deployed at: ${address});
-      document.getElementById("status").innerHTML = `
-        <span style="color:green;font-weight:bold">
-          Escrow Created!<br>
-          <a href="https://amoy.polygonscan.com/address/${address}" target="_blank">
-            View on Polygonscan →
-          </a>
-        </span>`;
-
-    } catch (err) {
-      const msg = err.message || err;
-      log("Deploy failed: " + msg);
-      alert("Deploy failed: " + msg.split('(')[0]);
+    async function deposit() {
+      const amt = document.getElementById("depositAmount").value;
+      if (!amt || amt <= 0) return alert("Enter amount");
+      const wei = ethers.utils.parseEther(amt);
+      const tx = await contract.deposit({ value: wei });
+      alert("Transaction sent! Waiting...");
+      await tx.wait();
+      alert("Deposit successful!");
+      updateStatus();
     }
-  };
-</script>
 
+    async function release() {
+      const tx = await contract.release();
+      alert("Releasing funds…");
+      await tx.wait();
+      alert("Funds released to seller!");
+      updateStatus();
+    }
+
+    async function refund() {
+      const tx = await contract.refund();
+      alert("Refunding buyer…");
+      await tx.wait();
+      alert("Refund successful!");
+      updateStatus();
+    }
+
+    init();
+  </script>
 </body>
 </html>
