@@ -1,39 +1,85 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>FreeEscrow Test</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FreeEscrow – Your Decentralized Escrow</title>
   <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 50px; background: #f0f2f5; text-align: center; }
-    button { padding: 15px 30px; font-size: 18px; }
-    #log { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; text-align: left; }
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background:#f0f2f5; text-align:center; }
+    button { padding: 14px 28px; font-size: 17px; margin: 12px; border:none; border-radius:10px; cursor:pointer; }
+    .primary { background:#6366f1; color:white; }
+    .primary:hover { background:#4f46e5; }
+    input { padding: 12px; width: 100%; margin:10px 0; font-size:16px; border:1px solid #ccc; border-radius:8px; }
+    .box { background:white; padding:30px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.1); }
+    .success { color:green; font-weight:bold; }
+    .error { color:red; }
   </style>
 </head>
 <body>
-  <h1>FreeEscrow – Connect Test</h1>
-  <button id="connect">CONNECT WALLET NOW</button>
-  <div id="log">Click the button → watch here</div>
+  <div class="box">
+    <h1>🔒 FreeEscrow</h1>
+    <p>Zero fees · 100% on-chain · Polygon Amoy testnet</p>
+
+    <button id="connect" class="primary">Connect Wallet</button>
+    <p id="account"></p>
+
+    <div id="main" style="display:none;">
+      <h2>Create New Escrow</h2>
+      <input type="text" id="seller" placeholder="Seller wallet address (0x…)" />
+      <input type="number" id="days" placeholder="Duration (days)" value="7" min="1" />
+      <input type="number" id="amount" step="0.001" placeholder="Amount in POL" value="0.05" />
+      <button id="create" class="primary">🚀 Create Escrow</button>
+      <p id="status"></p>
+    </div>
+  </div>
 
 <script>
-  const log = document.getElementById("log");
+  const CONTRACT_ADDRESS = "0x95612608c810AB1D8d3492E441E0E2810AbBef38";
+  const ABI = [
+    "constructor(address _seller, uint _durationInDays) payable",
+    "function release()",
+    "function refund()",
+    "function buyer() view returns (address)",
+    "function seller() view returns (address payable)",
+    "function amount() view returns (uint)",
+    "function released() view returns (bool)",
+    "function deadline() view returns (uint)"
+  ];
+
+  let signer, factory;
+
   document.getElementById("connect").onclick = async () => {
-    log.innerHTML += "<br>1. Checking for MetaMask...";
+    if (!window.ethereum) return alert("Install MetaMask!");
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = provider.getSigner();
+    const address = await signer.getAddress();
+    document.getElementById("account").innerHTML = Connected: <b>${address.slice(0,8)}...${address.slice(-6)}</b>;
+    document.getElementById("connect").style.display = "none";
+    document.getElementById("main").style.display = "block";
 
-    if (!window.ethereum) {
-      log.innerHTML += "<br>❌ MetaMask NOT detected. Install it first!";
-      alert("MetaMask not found. Install from https://metamask.io and refresh.");
-      return;
-    }
-    log.innerHTML += "<br>✅ MetaMask detected!";
+    // Prepare factory for deploying new escrows
+    const bytecode = "608060405234801561001057600080fd5b5060c08061001f60003960c0f3fe60806040526004361061003f5760003560e01c80633ccfd60b1461004457806381e82b7a14610071578063b5c3f2e31461009e575b600080fd5b61005f6004803603602081101561005a57600080fd5b503381336100b9565b60408051918252519081900360200190f35b61008c6004803603602081101561008857600080fd5b503381336100c2565b604080516001600160a01b039092168252519081900360200190f35b6100b76100d1565b005b60005481565b6001546001600160a01b031681565b600080546001600160a01b0319166001600160a01b0392909216919091179055565b600080546001600160a01b0319169055506100f6600082826100e983856100e8565b5050565b6000828261010c919061010b565b5050565b600061011882610117565b91506000828261012a9190610129565b5050565b600061013682610135565b9150600082826101489190610147565b50505050565b6000808261015a9190610159565b5050565b600061016782610166565b9150600082826101799190610178565b50505050565b6000808261018c919061018b565b5050565b600061019982610198565b9150600082826101ab91906101aa565b5050505056";
+    factory = new ethers.ContractFactory(ABI, bytecode, signer);
+  };
 
-    log.innerHTML += "<br>2. Requesting connection...";
+  document.getElementById("create").onclick = async () => {
+    const seller = document.getElementById("seller").value.trim();
+    const days = document.getElementById("days").value;
+    const amount = ethers.utils.parseEther(document.getElementById("amount").value || "0");
+
+    if (!ethers.utils.isAddress(seller)) return alert("Invalid seller address");
+
+    const status = document.getElementById("status");
+    status.innerHTML = "Sending transaction…";
+
     try {
-      const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-      log.innerHTML += "<br>✅ SUCCESS! Connected as " + accounts[0];
-      alert("Connected perfectly! 🎉 Your address: " + accounts[0]);
-    } catch (err) {
-      log.innerHTML += "<br>❌ Failed: " + err.message;
+      const escrow = await factory.deploy(seller, days, { value: amount });
+      await escrow.deployTransaction.wait();
+      status.innerHTML = <span class="success">Escrow created!<br>New contract: <br><code>${escrow.address}</code></span>;
+    } catch (e) {
+      status.innerHTML = <span class="error">Error: ${e.message.split("(")[0]}</span>;
     }
   };
 </script>
