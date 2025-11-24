@@ -3,112 +3,106 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Simple Escrow - Polygon Amoy</title>
+  <title>Simple Escrow – Polygon Amoy</title>
   <script src="https://cdn.ethers.org/lib/ethers-5.7.umd.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 20px; background:#f0f4ff; line-height:1.6; }
-    h1 { text-align:center; color:#6366f1; }
-    .card { background:white; padding:30px; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,0.1); }
-    button { padding:14px 20px; font-size:16px; margin:8px 0; border:none; border-radius:10px; cursor:pointer; width:100%; font-weight:bold; }
+    body { font-family: system-ui, sans-serif; max-width: 660px; margin: 40px auto; padding: 20px; background:#f8faff; line-height:1.6; }
+    h1 { text-align:center; color:#4f46e5; margin-bottom:10px; }
+    .card { background:white; padding:32px; border-radius:18px; box-shadow:0 10px 40px rgba(0,0,0,0.08); }
+    button { padding:16px; font-size:17px; margin:12px 0; border:none; border-radius:12px; cursor:pointer; width:100%; font-weight:bold; transition:0.2s; }
+    button:hover { transform: translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.15); }
     .deposit { background:#10b981; color:white; }
     .release { background:#6366f1; color:white; }
     .refund { background:#ef4444; color:white; }
-    input { padding:14px; font-size:16px; width:100%; border:1px solid #ccc; border-radius:10px; margin:10px 0; box-sizing:border-box; }
-    .info { padding:15px; background:#e0e7ff; border-radius:10px; font-family:monospace; font-size:0.9em; }
-    #status { margin:20px 0; padding:12px; border-radius:8px; font-weight:bold; }
+    input { padding:16px; font-size:17px; width:100%; border:2px solid #e0e7ff; border-radius:12px; margin:12px 0; box-sizing:border-box; }
+    .info { padding:16px; background:#e0e7ff; border-radius:12px; font-family:monospace; font-size:0.92em; word-break:break-all; }
+    #status { margin:20px 0; padding:14px; border-radius:12px; font-weight:bold; text-align:center; }
     .success { background:#d1fae5; color:#065f46; }
     .error { background:#fee2e2; color:#991b1b; }
   </style>
 </head>
 <body>
-  <h1>Simple Escrow – Polygon Amoy Testnet</h1>
+  <h1>Simple Escrow</h1>
+  <p style="text-align:center; color:#666;">Polygon Amoy Testnet – 100% on-chain</p>
+
   <div class="card">
     <div class="info">
-      Contract: <code>0x01053CB1ae44F849563013F437dfD097Ed8841C3</code><br>
+      Contract: <code>0x24f92e4AF56a70dceaD3a1b990c18EF4c768D009</code><br><br>
       Network: <span id="network">checking…</span>
     </div>
 
-    <div id="status">Connecting to wallet…</div>
+    <div id="status">Connecting wallet…</div>
 
     <p><strong>Escrow Amount:</strong> <span id="amount">0</span> POL</p>
     <p><strong>Buyer:</strong> <span id="buyer">—</span></p>
     <p><strong>Seller:</strong> <span id="seller">—</span></p>
     <p><strong>Deadline:</strong> <span id="deadline">—</span></p>
-    <p><strong>Funds Released?</strong> <span id="released">—</span></p>
+    <p><strong>Released?</strong> <span id="released">No</span></p>
 
-    <hr>
+    <hr style="border:1px dashed #ddd; margin:30px 0;">
 
     <h3>Buyer: Deposit Funds</h3>
-    <input type="number" step="0.001" id="depositAmount" placeholder="Amount in POL (e.g. 0.05)" />
+    <input type="number" step="0.001" id="depositAmount" placeholder="Enter amount in POL (e.g. 0.05)" />
     <button class="deposit" onclick="deposit()">Deposit POL</button>
 
-    <h3>Seller: Release Funds to Seller</h3>
-    <button class="release" onclick="release()">Release Funds</button>
+    <h3>Seller: Release Funds</h3>
+    <button class="release" onclick="release()">Release to Seller</button>
 
     <h3>Buyer: Claim Refund (after deadline)</h3>
     <button class="refund" onclick="refund()">Request Refund</button>
   </div>
 
   <script>
-    const CONTRACT_ADDRESS = "0x01053CB1ae44F849563013F437dfD097Ed8841C3";
-    const ABI = [{"inputs":[],"name":"deposit","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"address","name":"_seller","type":"address"},{"internalType":"uint256","name":"_durationInDays","type":"uint256"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Deposited","type":"event"},{"inputs":[],"name":"refund","outputs":[],"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Refunded","type":"event"},{"inputs":[],"name":"release","outputs":[],"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"seller","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Released","type":"event"},{"inputs":[],"name":"amount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"buyer","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"deadline","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"released","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"seller","outputs":[{"internalType":"address payable","name":"","type":"address"}],"stateMutability":"view","type":"function"}];
+    const ADDRESS = "0x24f92e4AF56a70dceaD3a1b990c18EF4c768D009";
+    const ABI = [{"inputs":[],"name":"deposit","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[{"internalType":"address","name":"_seller","type":"address"},{"internalType":"uint256","name":"_durationInDays","type":"uint256"}],"stateMutability":"payable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Deposited","type":"event"},{"inputs":[],"name":"refund","outputs":[],"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"buyer","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Refunded","type":"event"},{"inputs":[],"name":"release","outputs":[],"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"seller","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Released","type":"event"},{"inputs":[],"name":"amount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"buyer","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"deadline","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"released","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"seller","outputs":[{"internalType":"address payable","name":"","type":"address"}],"stateMutability":"view","type":"function"}];
 
-    let provider, signer, contract, userAddress;
+    let provider, signer, contract, account;
 
     async function init() {
-      if (!window.ethereum) {
-        document.getElementById("status").innerHTML = "<span class='error'>Please install MetaMask!</span>";
-        return;
-      }
+      if (!window.ethereum) return document.getElementById("status").innerHTML = "<span class='error'>MetaMask not found</span>";
 
       provider = new ethers.providers.Web3Provider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
       signer = provider.getSigner();
-      userAddress = await signer.getAddress();
-      contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      account = await signer.getAddress();
+      contract = new ethers.Contract(ADDRESS, ABI, signer);
 
-      const network = await provider.getNetwork();
-      document.getElementById("network").textContent = ${network.name} (chain ${network.chainId});
+      const net = await provider.getNetwork();
+      document.getElementById("network").textContent = ${net.name} (chain ${net.chainId});
 
-      if (network.chainId !== 80002) {
-        document.getElementById("status").innerHTML = "<span class='error'>Switch MetaMask to Polygon Amoy (chain 80002)</span>";
+      if (net.chainId !== 80002) {
+        document.getElementById("status").innerHTML = "<span class='error'>Please switch to Polygon Amoy testnet (chain 80002)</span>";
         return;
       }
 
-      document.getElementById("status").innerHTML = "<span class='success'>Connected! Ready to go</span>";
-      updateStatus();
-      setInterval(updateStatus, 10000);
+      document.getElementById("status").innerHTML = "<span class='success'>Connected! Ready</span>";
+      refresh();
+      setInterval(refresh, 10000);
     }
 
-    async function updateStatus() {
+    async function refresh() {
       try {
-        const [amt, buyer, sellerAddr, deadline, released] = await Promise.all([
-          contract.amount(),
-          contract.buyer(),
-          contract.seller(),
-          contract.deadline(),
-          contract.released()
+        const [amt, buyer, seller, deadline, released] = await Promise.all([
+          contract.amount(), contract.buyer(), contract.seller(),
+          contract.deadline(), contract.released()
         ]);
-
         document.getElementById("amount").textContent = ethers.utils.formatEther(amt);
-        document.getElementById("buyer").textContent = buyer === "0x0000000000000000000000000000000000000000" ? "None" : buyer.slice(0,8)+"...";
-        document.getElementById("seller").textContent = sellerAddr.slice(0,8)+"...";
-        document.getElementById("deadline").textContent = deadline.toNumber() === 0 ? "—": new Date(deadline * 1000).toLocaleString();
+        document.getElementById("buyer").textContent = buyer === "0x0000000000000000000000000000000000000000" ? "—": buyer.slice(0,10)+"...";
+        document.getElementById("seller").textContent = seller.slice(0,10)+"...";
+        document.getElementById("deadline").textContent = deadline.eq(0) ? "—" : new Date(deadline * 1000).toLocaleString();
         document.getElementById("released").textContent = released ? "Yes" : "No";
-      } catch (e) {
-        console.error(e);
-      }
+      } catch(e) { console.error(e); }
     }
 
     async function deposit() {
-      const amt = document.getElementById("depositAmount").value;
-      if (!amt || amt <= 0) return alert("Enter a valid amount");
-      const wei = ethers.utils.parseEther(amt);
+      const val = document.getElementById("depositAmount").value;
+      if (!val || val <= 0) return alert("Enter an amount");
+      const wei = ethers.utils.parseEther(val);
       const tx = await contract.deposit({ value: wei });
-      alert("Sending transaction…");
+      alert("Transaction sent – waiting for confirmation…");
       await tx.wait();
       alert("Deposit successful!");
-      updateStatus();
+      refresh();
     }
 
     async function release() {
@@ -116,15 +110,15 @@
       alert("Releasing funds…");
       await tx.wait();
       alert("Funds released to seller!");
-      updateStatus();
+      refresh();
     }
 
     async function refund() {
       const tx = await contract.refund();
       alert("Requesting refund…");
       await tx.wait();
-      alert("Refund sent back to buyer!");
-      updateStatus();
+      alert("Refund successful!");
+      refresh();
     }
 
     init();
